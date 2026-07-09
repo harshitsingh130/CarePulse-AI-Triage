@@ -36,9 +36,16 @@ export function Auth({ onLogin }: { onLogin?: () => void }) {
         setMode('challenge');
       } else {
         onLogin?.();
-        const params = new URLSearchParams(window.location.search);
-        const redirect = params.get('redirect');
-        navigate(redirect || '/');
+        // Redirect based on role
+        if (authService.isClinicalUser()) {
+          navigate('/dashboard');
+        } else {
+          // Patients always go to patient portal, never to dashboard
+          const params = new URLSearchParams(window.location.search);
+          const redirect = params.get('redirect');
+          const safeRedirect = redirect && !redirect.startsWith('/dashboard') ? redirect : '/';
+          navigate(safeRedirect);
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sign in failed';

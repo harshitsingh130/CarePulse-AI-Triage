@@ -80,6 +80,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             return _get_triage_history(patient_id)
         elif path == "/appointments" and http_method == "GET":
             return _get_appointments(patient_id)
+        elif path == "/appointments/reschedule" and http_method == "POST":
+            return _reschedule_appointment(patient_id, event)
         elif path == "/consent" and http_method == "POST":
             return _grant_consent(patient_id, event)
         elif path.startswith("/consent/") and http_method == "DELETE":
@@ -314,6 +316,65 @@ def _get_appointments(patient_id: str) -> dict:
 
     items = response.get("Items", [])
     return _response(200, items)
+
+
+def _reschedule_appointment(patient_id: str, event: dict) -> dict:
+    """Reschedule an existing appointment to a new date/time."""
+    body = json.loads(event.get("body", "{}") or "{}")
+    appointment_id = body.get("appointmentId")
+    new_datetime = body.get("newDateTime")
+
+    if not appointment_id or not new_datetime:
+        return _response(400, {"error": "appointmentId and newDateTime are required"})
+
+    # Validate the new datetime format
+    try:
+        from datetime import datetime as dt
+        parsed_dt = dt.fromisoformat(new_datetime.replace("Z", "+00:00"))
+        # Ensure new time is in the future
+        if parsed_dt <= datetime.now(timezone.utc):
+            return _response(400, {"error": "New appointment time must be in the future"})
+    except (ValueError, TypeError):
+        return _response(400, {"error": "Invalid datetime format. Use ISO 8601 (e.g. 2026-07-15T10:00:00Z)"})
+
+    # Verify the appointment belongs to this patient
+    response = appointments_table.get_item(
+        Key={"patientId": patient_id, "appointmentId": appointment_id}
+    )
+    item = response.get("Item")
+
+    if not item:
+        return _response(404, {"error": "Appointment not found"})
+
+    if item.get("status") == "CANCELLED":
+        return _response(400, {"error": "Cannot reschedule a cancelled appointment"})
+
+    if item.get("status") == "COMPLETED":
+        return _response(400, {"error": "Cannot reschedule a completed appointment"})
+
+    now = datetime.now(timezone.utc).isoformat()
+    original_time = item.get("scheduledAt", "")
+
+    # Update the appointment with new time
+    appointments_table.update_item(
+        Key={"patientId": patient_id, "appointmentId": appointment_id},
+        UpdateExpression="SET scheduledAt = :new_time, #s = :status, previousScheduledAt = :prev, rescheduledAt = :now, rescheduledBy = :by",
+        ExpressionAttributeValues={
+            ":new_time": new_datetime,
+            ":status": "SCHEDULED",
+            ":prev": original_time,
+            ":now": now,
+            ":by": "patient",
+        },
+        ExpressionAttributeNames={"#s": "status"},
+    )
+
+    return _response(200, {
+        "message": "Appointment rescheduled successfully",
+        "appointmentId": appointment_id,
+        "previousTime": original_time,
+        "newTime": new_datetime,
+    })
 
 
 def _grant_consent(patient_id: str, event: dict) -> dict:

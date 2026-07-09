@@ -17,7 +17,8 @@ export function DashboardLayout() {
       return;
     }
     if (!authService.isClinicalUser()) {
-      setAuthorized(false);
+      // Patients should never see the dashboard — redirect to home
+      navigate('/');
       return;
     }
     setAuthorized(true);
@@ -28,19 +29,7 @@ export function DashboardLayout() {
   }
 
   if (authorized === false) {
-    return (
-      <div className="dash">
-        <div className="dash__content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center' }}>
-            <h1 style={{ fontSize: '1.5rem', marginBottom: '12px' }}>Access Denied</h1>
-            <p style={{ color: '#64748b', marginBottom: '20px' }}>
-              You need to be assigned to the <strong>nurse</strong>, <strong>physician</strong>, or <strong>admin</strong> group to access the dashboard.
-            </p>
-            <button className="btn btn--primary" onClick={() => navigate('/')}>Back to Patient Portal</button>
-          </div>
-        </div>
-      </div>
-    );
+    return null; // Will redirect via useEffect
   }
 
   const username = authService.getUsername();

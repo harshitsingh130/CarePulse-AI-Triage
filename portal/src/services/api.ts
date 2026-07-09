@@ -61,6 +61,13 @@ export async function getAppointments(): Promise<Appointment[]> {
   return request<Appointment[]>('/appointments');
 }
 
+export async function rescheduleAppointment(appointmentId: string, newDateTime: string): Promise<{ message: string; previousTime: string; newTime: string }> {
+  return request('/appointments/reschedule', {
+    method: 'POST',
+    body: JSON.stringify({ appointmentId, newDateTime }),
+  });
+}
+
 // --- Consent ---
 
 export async function getConsentStatus(): Promise<ConsentStatus> {
