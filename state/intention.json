@@ -1,0 +1,50 @@
+{
+  "intentionId": "5b7f2d23-d388-4040-b99a-7c34e8940007",
+  "intention": {
+    "aim": {
+      "compliance": [
+        "HIPAA",
+        "PHI protection"
+      ],
+      "constraints": [
+        "24/7 availability",
+        "consistent urgency scoring",
+        "audit trail for all decisions"
+      ],
+      "domain": "clinical-triage",
+      "integrations": [
+        "EHR systems",
+        "clinic scheduling",
+        "specialist routing"
+      ],
+      "scale": "1200+ daily inquiries across 15 clinics"
+    },
+    "customer": "Healthcare Network",
+    "goals": [
+      "Build a 24/7 digital patient triage system handling 1200+ daily inquiries across 15 clinics",
+      "Accurately score patient urgency and route to the appropriate specialist",
+      "Generate structured clinical summaries for receiving physicians",
+      "Reduce triage time from 12-20 minutes to under 3 minutes per patient",
+      "Maintain strict HIPAA compliance for all PHI handling"
+    ],
+    "industry": "healthcare",
+    "regulated": true,
+    "schemaVersion": "1",
+    "updatedAt": "2026-07-08",
+    "_id": "5b7f2d23-d388-4040-b99a-7c34e8940007",
+    "requirements": {
+      "functional": [
+        {"id": "FR-001", "description": "Conduct conversational symptom assessment (onset, severity 1-10, duration, history)"},
+        {"id": "FR-002", "description": "Assign urgency level: Emergency / Urgent / Standard / Routine"},
+        {"id": "FR-003", "description": "Immediately escalate Emergency cases to on-call staff"},
+        {"id": "FR-004", "description": "Check patient current medications for dangerous drug interactions"},
+        {"id": "FR-005", "description": "Route to appropriate specialist department based on symptom pattern"},
+        {"id": "FR-006", "description": "Generate structured clinical note in SOAP format for the receiving physician"},
+        {"id": "FR-007", "description": "Ensure all PHI is encrypted at rest and in transit"},
+        {"id": "FR-008", "description": "Redact PHI from all application logs (HIPAA compliance)"},
+        {"id": "FR-009", "description": "Maintain patient consent tracking for data processing"},
+        {"id": "FR-010", "description": "Provide patient-facing portal with triage status and appointment details"}
+      ]
+    }
+  }
+}

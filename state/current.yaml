@@ -1,0 +1,20 @@
+customer: Healthcare Network
+intent:
+  - Build a 24/7 digital patient triage system handling 1200+ daily inquiries across 15 clinics
+  - Accurately score patient urgency and route to the appropriate specialist
+  - Generate structured clinical summaries for receiving physicians
+  - Reduce triage time from 12-20 minutes to under 3 minutes per patient
+  - Maintain strict HIPAA compliance for all PHI handling
+aimTier: ~
+currentStage: resolved
+aidlcInstalled: true
+activePrograms:
+  - aine-orchestration
+  - responsible-ai
+  - aws-app-builder
+  - aws-aidlc
+  - ai-operations
+lensOverlays:
+  - healthcare-lens
+startedAt: 2026-07-08T09:49:44.736Z
+updatedAt: 2026-07-08T10:15:00.000Z

@@ -1,0 +1,94 @@
+{
+  "Comment": "Nurse Handoff — Standard Workflow (~5% of sessions, waits for nurse callback)",
+  "StartAt": "ReceiveHandoff",
+  "States": {
+    "ReceiveHandoff": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${ReceiveHandoffFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "connection_id.$": "$.connection_id",
+          "structured_symptoms.$": "$.structured_symptoms",
+          "scoring_result.$": "$.scoring_result"
+        }
+      },
+      "ResultPath": "$.handoff_init",
+      "Next": "WaitForNurse"
+    },
+    "WaitForNurse": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Parameters": {
+        "FunctionName": "${WaitForNurseFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "task_token.$": "$$.Task.Token"
+        }
+      },
+      "ResultPath": "$.nurse_response",
+      "TimeoutSeconds": 300,
+      "Next": "ProcessNurseDecision",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout"],
+          "Next": "DefaultToUrgent"
+        }
+      ]
+    },
+    "ProcessNurseDecision": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${ProcessNurseDecisionFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "nurse_urgency.$": "$.nurse_response.Payload.urgency_level",
+          "nurse_id.$": "$.nurse_response.Payload.nurse_id",
+          "nurse_reason.$": "$.nurse_response.Payload.reason",
+          "original_urgency.$": "$.scoring_result.urgency_level"
+        }
+      },
+      "ResultPath": "$.nurse_decision",
+      "Next": "ResumePipeline"
+    },
+    "DefaultToUrgent": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${ProcessNurseDecisionFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "nurse_urgency": "URGENT",
+          "nurse_id": "SYSTEM_TIMEOUT",
+          "nurse_reason": "No nurse responded within 5 minutes. Defaulting to URGENT for patient safety.",
+          "original_urgency.$": "$.scoring_result.urgency_level",
+          "timeout": true
+        }
+      },
+      "ResultPath": "$.nurse_decision",
+      "Next": "ResumePipeline"
+    },
+    "ResumePipeline": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::states:startExecution.sync:2",
+      "Parameters": {
+        "StateMachineArn": "${TriagePipelineResumeArn}",
+        "Input": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "connection_id.$": "$.connection_id",
+          "patient_clinic_id.$": "$.patient_clinic_id",
+          "resume_from": "DrugCheck",
+          "structured_symptoms.$": "$.structured_symptoms",
+          "scoring_result.$": "$.nurse_decision.Payload.updated_urgency_result"
+        }
+      },
+      "End": true
+    }
+  }
+}

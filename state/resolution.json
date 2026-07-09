@@ -1,0 +1,38 @@
+{
+  "intentionId": "5b7f2d23-d388-4040-b99a-7c34e8940007",
+  "activatedPrograms": [
+    {
+      "id": "aine-orchestration",
+      "name": "AINE Orchestration Layer",
+      "score": 100,
+      "traces": ["✓ true (weight=100)"]
+    },
+    {
+      "id": "responsible-ai",
+      "name": "Responsible AI",
+      "score": 95,
+      "traces": ["✓ intake.regulated === true (weight=95)"]
+    },
+    {
+      "id": "aws-app-builder",
+      "name": "aws-app-builder",
+      "score": 90,
+      "traces": ["✓ intent.includes('build') (weight=90)"]
+    },
+    {
+      "id": "aws-aidlc",
+      "name": "AWS AI-DLC (AI-Driven Development Life Cycle)",
+      "score": 70,
+      "traces": ["✓ intent.includes('build') (weight=70)"]
+    },
+    {
+      "id": "ai-operations",
+      "name": "AI Operations (AI Ops)",
+      "score": 60,
+      "traces": ["✓ intake.regulated === true (weight=60)"]
+    }
+  ],
+  "lensOverlays": ["healthcare-lens"],
+  "status": "resolved",
+  "resolvedAt": "2026-07-08"
+}

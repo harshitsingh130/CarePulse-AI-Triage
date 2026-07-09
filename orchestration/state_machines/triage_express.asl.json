@@ -1,0 +1,273 @@
+{
+  "Comment": "Healthcare Triage Pipeline — Express Workflow (95% of sessions, <5 min)",
+  "StartAt": "InitSession",
+  "States": {
+    "InitSession": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${InitSessionFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "patient_clinic_id.$": "$.patient_clinic_id",
+          "connection_id.$": "$.connection_id"
+        }
+      },
+      "ResultPath": "$.init_result",
+      "Next": "AssessmentFirstTurn"
+    },
+    "AssessmentFirstTurn": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${SymptomAssessmentFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "patient_message": null,
+          "ehr_medications.$": "$.init_result.Payload.ehr_medications",
+          "ehr_conditions.$": "$.init_result.Payload.ehr_conditions",
+          "conversation_state": null
+        }
+      },
+      "ResultPath": "$.assessment_result",
+      "Next": "SendResponseAndWait"
+    },
+    "SendResponseAndWait": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Parameters": {
+        "FunctionName": "${SendAndWaitFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "connection_id.$": "$.connection_id",
+          "ai_response.$": "$.assessment_result.Payload.ai_response",
+          "show_severity_slider.$": "$.assessment_result.Payload.show_severity_slider",
+          "task_token.$": "$$.Task.Token"
+        }
+      },
+      "ResultPath": "$.patient_response",
+      "TimeoutSeconds": 900,
+      "Next": "ProcessPatientMessage",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout"],
+          "Next": "SessionTimeout"
+        }
+      ]
+    },
+    "ProcessPatientMessage": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${SymptomAssessmentFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "patient_message.$": "$.patient_response.Payload.patient_message",
+          "conversation_state.$": "$.assessment_result.Payload.conversation_state"
+        }
+      },
+      "ResultPath": "$.assessment_result",
+      "Next": "CheckAssessmentComplete"
+    },
+    "CheckAssessmentComplete": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.assessment_result.Payload.assessment_complete",
+          "BooleanEquals": true,
+          "Next": "ScoreUrgency"
+        }
+      ],
+      "Default": "SendResponseAndWait"
+    },
+    "ScoreUrgency": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${TriageScoringFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "structured_symptoms.$": "$.assessment_result.Payload.structured_symptoms"
+        }
+      },
+      "ResultPath": "$.scoring_result",
+      "Next": "EvaluateUrgency"
+    },
+    "EvaluateUrgency": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.scoring_result.Payload.urgency_level",
+          "StringEquals": "EMERGENCY",
+          "Next": "EmergencyEscalation"
+        },
+        {
+          "Variable": "$.scoring_result.Payload.requires_nurse_review",
+          "BooleanEquals": true,
+          "Next": "TriggerNurseHandoff"
+        }
+      ],
+      "Default": "DrugCheck"
+    },
+    "EmergencyEscalation": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "SendNotifications",
+          "States": {
+            "SendNotifications": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${NotificationFunctionArn}",
+                "Payload": {
+                  "session_id.$": "$.session_id",
+                  "patient_id.$": "$.patient_id",
+                  "urgency_level": "EMERGENCY",
+                  "channels": ["SMS", "PUSH", "PAGERDUTY"]
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "NotifyPatientEmergency",
+          "States": {
+            "NotifyPatientEmergency": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${SendAndWaitFunctionArn}",
+                "Payload": {
+                  "session_id.$": "$.session_id",
+                  "connection_id.$": "$.connection_id",
+                  "ai_response": "Based on your symptoms, we're alerting medical staff immediately. Would you like to connect with them now?",
+                  "emergency_alert": true,
+                  "no_wait": true
+                }
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.escalation_result",
+      "Next": "DrugCheck"
+    },
+    "TriggerNurseHandoff": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${NurseHandoffTriggerFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "connection_id.$": "$.connection_id",
+          "structured_symptoms.$": "$.assessment_result.Payload.structured_symptoms",
+          "scoring_result.$": "$.scoring_result.Payload"
+        }
+      },
+      "ResultPath": "$.handoff_result",
+      "End": true,
+      "Comment": "Express workflow ends here. Standard workflow takes over for nurse wait."
+    },
+    "DrugCheck": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${DrugInteractionFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "patient_ehr_id.$": "$.init_result.Payload.patient_ehr_id",
+          "reported_medications.$": "$.assessment_result.Payload.structured_symptoms.medications.current"
+        }
+      },
+      "ResultPath": "$.drug_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.SdkClientException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.drug_result",
+          "Next": "SpecialistRouting"
+        }
+      ],
+      "Next": "SpecialistRouting"
+    },
+    "SpecialistRouting": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${SpecialistRoutingFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "patient_clinic_id.$": "$.patient_clinic_id",
+          "structured_symptoms.$": "$.assessment_result.Payload.structured_symptoms",
+          "urgency_result.$": "$.scoring_result.Payload.urgency_result"
+        }
+      },
+      "ResultPath": "$.routing_result",
+      "Next": "GenerateSummary"
+    },
+    "GenerateSummary": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${ClinicalSummaryFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "structured_symptoms.$": "$.assessment_result.Payload.structured_symptoms",
+          "urgency_result.$": "$.scoring_result.Payload.urgency_result",
+          "interaction_result.$": "$.drug_result.Payload.interaction_result",
+          "routing_decision.$": "$.routing_result.Payload.routing_decision"
+        }
+      },
+      "ResultPath": "$.summary_result",
+      "Next": "CompleteSession"
+    },
+    "CompleteSession": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${CompleteSessionFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "connection_id.$": "$.connection_id",
+          "urgency_level.$": "$.scoring_result.Payload.urgency_level",
+          "department.$": "$.routing_result.Payload.department",
+          "patient_summary.$": "$.summary_result.Payload.patient_summary"
+        }
+      },
+      "End": true
+    },
+    "SessionTimeout": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${CompleteSessionFunctionArn}",
+        "Payload": {
+          "session_id.$": "$.session_id",
+          "patient_id.$": "$.patient_id",
+          "connection_id.$": "$.connection_id",
+          "timeout": true
+        }
+      },
+      "End": true
+    }
+  }
+}

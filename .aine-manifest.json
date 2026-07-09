@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-07-08T09:49:44.735Z",
+  "description": "AINE reference manifest. Read this file at session start to know which references to consult before generating code or design artifacts.",
+  "usage": "Call aine_get_skill(skillId=<skillId>, file=<file>) to read each reference before writing code for that category.",
+  "mandatory_before_write": true,
+  "targets": [
+    "kiro"
+  ],
+  "references": [],
+  "categories": {
+    "infrastructure": "Read before writing CDK stacks, VPC config, IAM roles",
+    "frontend": "Read before writing React/UI code, chat components, dashboards",
+    "ai-pipeline": "Read before writing agent code, workflows, model config",
+    "governance": "Read before adding guardrails, PII filters, audit trails",
+    "observability": "Read before adding monitoring, alarms, evaluations",
+    "resilience": "Read before adding error handling, circuit breakers, fallbacks",
+    "testing": "Read before writing tests, evaluation suites, seed data",
+    "deployment": "Read before deploying to AgentCore or configuring CI/CD",
+    "domain": "Read before implementing domain-specific business logic"
+  }
+}
